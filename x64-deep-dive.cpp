@@ -77,7 +77,7 @@ int TailCall2(int b) {
 
 
 int TailCall3(int a, int b) {
-	return a + b;
+	return 1;
 }
 
 
@@ -138,12 +138,112 @@ int TestFramePointerOmission() {
 }
 
 
+int RSPIsTheSameCall1(int p1) {
+	return p1;
+}
+
+
+int RSPIsTheSameCall4(int p1, int p2, int p3, int p4) {
+	return p1 + p2 + p3 + p4;
+}
+
+
+int RSPIsTheSameCall8(int p1, int p2, int p3, int p4, int p5, int p6, int p7, int p8) {
+	return p1 + p2 + p3 + p4 + p5 + p6 + p7 + p8;
+}
+
+
+/*
+Since RSP is used to reference both parameters and local variables in x64,
+the side effect and feature of x64 function is that RSP does not change
+thru all its body, changing only in prolog (begin) and epilog (end) parts
+of the function.
+
+# Win32
+int RSPIsTheSame(int p1, int p2, int p3, int p4, int p5, int p6, int p7, int p8) {
+# prolog-begin
+push        ebp
+mov         ebp,esp
+	RSPIsTheSameCall1(p1);
+mov         eax,dword ptr [p1]
+push        eax # RSP--
+call        RSPIsTheSameCall1
+add         esp,4 # RSP++
+# prolog-end
+	RSPIsTheSameCall4(p1, p2, p3, p4);
+mov         ecx,dword ptr [p4]
+push        ecx # RSP--
+mov         edx,dword ptr [p3]
+push        edx # RSP--
+mov         eax,dword ptr [p2]
+...
+call        RSPIsTheSameCall4
+add         esp,10h # RSP++
+	RSPIsTheSameCall8(p1, p2, p3, p4, p5, p6, p7, p8);
+mov         edx,dword ptr [p8]
+push        edx # RSP--
+...
+call        RSPIsTheSameCall8
+add         esp,20h # RSP++
+	return 1;
+mov         eax,1
+}
+# epilog-begin
+pop         ebp
+# epilog-end
+ret
+
+# Win64
+int RSPIsTheSame(int p1, int p2, int p3, int p4, int p5, int p6, int p7, int p8) {
+# prolog-begin
+mov         dword ptr [rsp+20h],r9d
+mov         dword ptr [rsp+18h],r8d
+mov         dword ptr [rsp+10h],edx
+mov         dword ptr [rsp+8],ecx
+push        rdi
+sub         rsp,40h # RSP last change
+# prolog-end
+	RSPIsTheSameCall1(p1);
+mov         ecx,dword ptr [p1]
+call        RSPIsTheSameCall1 (07FF791BC1262h)
+	RSPIsTheSameCall4(p1, p2, p3, p4);
+mov         r9d,dword ptr [p4]
+...
+call        RSPIsTheSameCall4 (07FF791BC1271h)
+	RSPIsTheSameCall8(p1, p2, p3, p4, p5, p6, p7, p8);
+mov         eax,dword ptr [p8]
+mov         dword ptr [rsp+38h],eax
+...
+call        RSPIsTheSameCall8 (07FF791BC1276h)
+	return 1;
+mov         eax,1
+}
+# epilog-begin
+add         rsp,40h # RSP restore
+pop         rdi
+# epilog-end
+ret
+*/
+int RSPIsTheSame(int p1, int p2, int p3, int p4, int p5, int p6, int p7, int p8) {
+	RSPIsTheSameCall1(p1);
+	RSPIsTheSameCall4(p1, p2, p3, p4);
+	RSPIsTheSameCall8(p1, p2, p3, p4, p5, p6, p7, p8);
+	return 1;
+}
+
+
+int TestRSPIsTheSame() {
+    return RSPIsTheSame(1, 2, 3, 4, 5, 6, 7, 8);
+}
+
+
 int main()
 {
 	int ret = 0;
 	ret += TestFastCall();
 	ret += TestTailCallElimination();
 	ret += TestFramePointerOmission();
+	ret += TestRSPIsTheSame();
 	return ret;
 }
 
