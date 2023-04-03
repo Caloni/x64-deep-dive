@@ -1,0 +1,4 @@
+cmake_minimum_required(VERSION 3.21.1)
+project(deepdive)
+add_executable(x64-deep-dive x64-deep-dive.cpp README.md)
+target_include_directories(x64-deep-dive PUBLIC ../../..)
