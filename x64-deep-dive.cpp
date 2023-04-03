@@ -108,11 +108,42 @@ int TestTailCallElimination() {
 }
 
 
+/*
+"Unlike the X86 CPU where the EBP register is used to access parameters and
+local variables on the stack, X64 functions do not make use of the RBP register
+for this purpose i.e. do not use the EBP register as a
+frame pointer." - x64 Deep Dive
+
+# Win32 (x86)
+int TestFramePointerOmission() {
+00601590  push        ebp
+00601591  mov         ebp,esp
+	return 1;
+00601593  mov         eax,1
+}
+00601598  pop         ebp
+00601599  ret
+
+# Win62 (x64)
+int TestFramePointerOmission() {
+00007FF7D6E215E0  push        rdi
+	return 1;
+00007FF7D6E215E2  mov         eax,1
+}
+00007FF7D6E215E7  pop         rdi
+00007FF7D6E215E8  ret
+*/
+int TestFramePointerOmission() {
+	return 1;
+}
+
+
 int main()
 {
 	int ret = 0;
 	ret += TestFastCall();
 	ret += TestTailCallElimination();
+	ret += TestFramePointerOmission();
 	return ret;
 }
 
