@@ -205,16 +205,16 @@ sub         rsp,40h # RSP last change
 # prolog-end
 	RSPIsTheSameCall1(p1);
 mov         ecx,dword ptr [p1]
-call        RSPIsTheSameCall1 (07FF791BC1262h)
+call        RSPIsTheSameCall1
 	RSPIsTheSameCall4(p1, p2, p3, p4);
 mov         r9d,dword ptr [p4]
 ...
-call        RSPIsTheSameCall4 (07FF791BC1271h)
+call        RSPIsTheSameCall4
 	RSPIsTheSameCall8(p1, p2, p3, p4, p5, p6, p7, p8);
 mov         eax,dword ptr [p8]
 mov         dword ptr [rsp+38h],eax
 ...
-call        RSPIsTheSameCall8 (07FF791BC1276h)
+call        RSPIsTheSameCall8
 	return 1;
 mov         eax,1
 }
@@ -266,7 +266,7 @@ inc         dword ptr [p1]
 }
 pop         ebp # ... and saving stack frame
 	return HomingSpace3(p1 + 1, p2 + 1, p3 + 1, p4 + 1);
-jmp         HomingSpace3 (0E311C7h) # ret right to HomingSpace
+jmp         HomingSpace3 # ret right to HomingSpace
 
 # Win64
 	return HomingSpace3(p1 + 1, p2 + 1, p3 + 1, p4 + 1);
@@ -282,7 +282,7 @@ int HomingSpace2(int p1, int p2, int p3, int p4) {
 
 
 /*
-# Win32
+# Win32 Release
 int HomingSpace1(int p1, int p2, int p3, int p4) {
 push        ebp
 mov         ebp,esp
@@ -296,15 +296,39 @@ inc         dword ptr [p1] # original parameter lost
 }
 pop         ebp # stack frame recycled
 	return HomingSpace2(p1 + 1, p2 + 1, p3 + 1, p4 + 1);
-jmp         HomingSpace2 (09A10BEh) # ret to HomingSpace
+jmp         HomingSpace2 # ret to HomingSpace
 
-# Win64
+# Win32 Debug
+	return HomingSpace2(p1 + 1, p2 + 1, p3 + 1, p4 + 1);
+mov         eax,dword ptr [p4]
+add         eax,1
+push        eax # original params saved in the stack
+...
+call        HomingSpace2
+
+# Win64 Release
 	return HomingSpace2(p1 + 1, p2 + 1, p3 + 1, p4 + 1);
 inc         r9d # original parameter lost
 inc         r8d # original parameter lost
 inc         edx # original parameter lost
 inc         ecx # original parameter lost
 jmp         HomingSpace2 # no stack at all; ret right to HomingSpace
+
+# Win64 Debug
+int HomingSpace1(int p1, int p2, int p3, int p4) {
+mov         dword ptr [rsp+20h],r9d # homing space in action
+mov         dword ptr [rsp+18h],r8d
+mov         dword ptr [rsp+10h],edx
+mov         dword ptr [rsp+8],ecx
+push        rdi
+sub         rsp,30h
+	return HomingSpace2(p1 + 1, p2 + 1, p3 + 1, p4 + 1);
+mov         eax,dword ptr [p4]
+inc         eax
+mov         ecx,dword ptr [p3]
+inc         ecx # educated, but need to overwrite params
+...
+call        HomingSpace2
 */
 int HomingSpace1(int p1, int p2, int p3, int p4) {
 	return HomingSpace2(p1 + 1, p2 + 1, p3 + 1, p4 + 1);
