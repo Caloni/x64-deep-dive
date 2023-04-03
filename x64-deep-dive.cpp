@@ -237,6 +237,115 @@ int TestRSPIsTheSame() {
 }
 
 
+/*
+# Win64
+	return p1 + 1 + p2 + 1 + p3 + 1 + p4;
+lea         eax,[rdx+3]
+add         eax,ecx
+add         eax,r8d
+add         eax,r9d
+# Win32 is similar, but x64 is more elegant =)
+*/
+int HomingSpace3(int p1, int p2, int p3, int p4) {
+	return p1 + 1 + p2 + 1 + p3 + 1 + p4;
+}
+
+
+/*
+# Win32
+int HomingSpace2(int p1, int p2, int p3, int p4) {
+push        ebp
+mov         ebp,esp
+	return HomingSpace3(p1 + 1, p2 + 1, p3 + 1, p4 + 1);
+mov         eax,dword ptr [p4]
+inc         eax
+mov         dword ptr [p4],eax
+inc         dword ptr [p3] # same logic: original params lost...
+inc         dword ptr [p2]
+inc         dword ptr [p1]
+}
+pop         ebp # ... and saving stack frame
+	return HomingSpace3(p1 + 1, p2 + 1, p3 + 1, p4 + 1);
+jmp         HomingSpace3 (0E311C7h) # ret right to HomingSpace
+
+# Win64
+	return HomingSpace3(p1 + 1, p2 + 1, p3 + 1, p4 + 1);
+inc         r9d # original params lost
+inc         r8d
+inc         edx
+inc         ecx
+jmp         HomingSpace3 # ret right to HomingSpace
+*/
+int HomingSpace2(int p1, int p2, int p3, int p4) {
+	return HomingSpace3(p1 + 1, p2 + 1, p3 + 1, p4 + 1);
+}
+
+
+/*
+# Win32
+int HomingSpace1(int p1, int p2, int p3, int p4) {
+push        ebp
+mov         ebp,esp
+	return HomingSpace2(p1 + 1, p2 + 1, p3 + 1, p4 + 1);
+mov         eax,dword ptr [p4]
+inc         eax
+mov         dword ptr [p4],eax # original parameter lost
+inc         dword ptr [p3] # original parameter lost
+inc         dword ptr [p2] # original parameter lost
+inc         dword ptr [p1] # original parameter lost
+}
+pop         ebp # stack frame recycled
+	return HomingSpace2(p1 + 1, p2 + 1, p3 + 1, p4 + 1);
+jmp         HomingSpace2 (09A10BEh) # ret to HomingSpace
+
+# Win64
+	return HomingSpace2(p1 + 1, p2 + 1, p3 + 1, p4 + 1);
+inc         r9d # original parameter lost
+inc         r8d # original parameter lost
+inc         edx # original parameter lost
+inc         ecx # original parameter lost
+jmp         HomingSpace2 # no stack at all; ret right to HomingSpace
+*/
+int HomingSpace1(int p1, int p2, int p3, int p4) {
+	return HomingSpace2(p1 + 1, p2 + 1, p3 + 1, p4 + 1);
+}
+
+
+/*
+"(...) homing space and is used to store parameter values if either the function
+accesses the parameters by address instead of by value or if the function is
+compiled with the /homeparams flag. The minimum size of this homing space is
+0x20 bytes or four 64-bit slots, even if the function takes less than 4
+parameters. When the homing space is not used to store parameter values, the
+compiler uses it to save non-volatile registers." - x64 Deep Dive
+
+However, even in x86 those arguments can be lost if there is some optimization
+for parameters that are not used anymore, which is the case in this test. Note
+the recycle of positions in the stack and the economy of stack frames to
+call the nesting functions above.
+
+# Win32
+	int ret = HomingSpace1(1, 2, 3, 4);
+push        4
+push        3
+push        2
+push        1
+call        HomingSpace1
+
+# Win64
+	int ret = HomingSpace1(1, 2, 3, 4);
+mov         edx,2
+lea         r9d,[rdx+2]
+lea         r8d,[rdx+1]
+lea         ecx,[rdx-1]
+call        HomingSpace1
+*/
+int TestHomingSpace() {
+    int ret = HomingSpace1(1, 2, 3, 4);
+	return ret == 21 ? 1 : 0;
+}
+
+
 int main()
 {
 	int ret = 0;
@@ -244,6 +353,7 @@ int main()
 	ret += TestTailCallElimination();
 	ret += TestFramePointerOmission();
 	ret += TestRSPIsTheSame();
+	ret += TestHomingSpace();
 	return ret;
 }
 
