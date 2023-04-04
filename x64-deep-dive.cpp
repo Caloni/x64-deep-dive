@@ -543,6 +543,121 @@ int TestChildSP() {
 }
 
 
+/*
+3. Parameters are saved from the registers into memory.
+
+# Win64 Release
+	g_ParameterRetrieval_p7_retrieval = &p7;
+mov         r10,qword ptr [p7]
+mov         r11,rcx
+	return p1 + p2 + p3 + p4 + p5 + p6 + p7 + p8;
+mov         rcx,qword ptr [p8]
+mov         qword ptr [g_ParameterRetrieval_p7_retrieval],r10 # save nonvolatile register
+*/
+int* g_ParameterRetrieval_p7_retrieval;
+int ParameterRetrieval(int& p1, int& p2, int& p3, int& p4, int& p5, int& p6, int& p7, int& p8) {
+	g_ParameterRetrieval_p7_retrieval = &p7;
+	return p1 + p2 + p3 + p4 + p5 + p6 + p7 + p8;
+}
+
+/*
+2. Parameters are loaded from non-volatile registers and those registers
+are saved by the callee.
+
+	int oldP7 = *g_ParameterRetrieval_p7_retrieval;
+	return p1 + p2 + p3 + p4 + p5 + p6 + oldP7 + p8;
+mov         eax,dword ptr [rdx]
+mov         r10,rcx
+add         eax,dword ptr [r8]
+add         eax,dword ptr [r9]
+mov         rdx,qword ptr [p5]
+mov         rcx,qword ptr [g_ParameterRetrieval_p7_retrieval]
+*/
+int ParameterRetrieval2(int& p1, int& p2, int& p3, int& p4, int& p5, int& p6, int& p7, int& p8) {
+	int oldP7 = *g_ParameterRetrieval_p7_retrieval;
+	return p1 + p2 + p3 + p4 + p5 + p6 + oldP7 + p8;
+}
+
+/*
+4. Parameters are saved into non-volatile registers and those registers
+are saved by the callee.
+
+# Win64 Release
+int ParameterRetrieval3(int& p1, int& p2, int& p3, int& p4, int& p5, int& p6, int& p7, int& p8) {
+mov         qword ptr [rsp+8],rbx
+mov         qword ptr [rsp+10h],rsi
+mov         qword ptr [rsp+18h],rdi
+mov         qword ptr [rsp+20h],r14
+push        r15 # saves what will be p7
+	int oldP7 = p7;
+	for (int i = 0; i < 7; ++i) {
+		p7 += p1;
+mov         r10d,dword ptr [rcx]
+mov         r14,rcx
+mov         r15,qword ptr [p7] # going to use p7
+mov         rbx,rdx
+mov         rdi,r9
+mov         esi,dword ptr [r15] # Parameters are saved into non-volatile registers...
+add         r10d,esi
+...
+	}
+	int ret = p1 + p2 + p3 + p4 + p5 + p6 + p7 + p8;
+...
+	p7 = oldP7;
+	return ret;
+}
+...
+mov         dword ptr [r15],esi # ... and those registers are saved by the callee.
+mov         rsi,qword ptr [rsp+18h]
+pop         r15
+ret
+*/
+int ParameterRetrieval3(int& p1, int& p2, int& p3, int& p4, int& p5, int& p6, int& p7, int& p8) {
+	int oldP7 = p7;
+	for (int i = 0; i < 7; ++i) {
+		p7 += p1;
+	}
+	int ret = p1 + p2 + p3 + p4 + p5 + p6 + p7 + p8;
+	p7 = oldP7;
+	return ret;
+}
+
+
+/*
+"(...) as execution progresses within the function body, the contents of the
+parameter registers change and the initial parameter value gets overwritten. So,
+to determine the value of these register based parameters at any point during
+function execution, one needs to find out - where is the value of the parameter
+being read from and where is the value of the parameter being written to?
+Answers to these questions can be found by performing a sequence of steps in the
+debugger which can be grouped as follows: Determine if the parameters are loaded
+into the registers from memory. If so, the memory location can be examined to
+determine the parameter values. Determine if the parameters are loaded from
+non-volatile registers and if those registers are saved by the callee. If so,
+the saved non-volatile register values can be examined to determine the
+parameter values. Determine if the parameters are saved from the registers into
+memory. If so, the memory location can be examined to determine the parameter
+values. Determine if the parameters are saved into non-volatile registers and if
+those registers are saved by the callee. If so, the saved non-volatile register
+values can be examined to determine the parameter values." - x64 Deep Dive
+
+# Win64 Release
+1. Parameters are loaded into the registers from memory.
+mov         dword ptr [rbp+30h],5 # p5 = 5
+mov         dword ptr [rbp+28h],6 # p6 = 6
+mov         dword ptr [rbp+20h],7 # p7 = 7
+mov         dword ptr [rbp+18h],8 # p8 = 8
+call        ChildSPF1
+*/
+int TestParameterRetrieval() {
+	int p1 = 1, p2 = 2, p3 = 3, p4 = 4, p5 = 5, p6 = 6, p7 = 7, p8 = 8;
+	int ret = ParameterRetrieval(p1, p2, p3, p4, p5, p6, p7, p8)
+		+ ParameterRetrieval2(p1, p2, p3, p4, p5, p6, p7, p8)
+		+ ParameterRetrieval3(p1, p2, p3, p4, p5, p6, p7, p8);
+	return ret == 158942311 ? 1 : 0;
+}
+
+
 int main()
 {
 	int ret = 0;
@@ -553,6 +668,7 @@ int main()
 	ret += TestHomingSpace();
 	ret += TestHomingSpaceNonLeaf();
 	ret += TestChildSP();
+	ret += TestParameterRetrieval();
 	return ret;
 }
 
