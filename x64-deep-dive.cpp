@@ -370,6 +370,179 @@ int TestHomingSpace() {
 }
 
 
+/*
+"The register based parameter homing space exists only for non-leaf 
+functions." - x64 Deep Dive
+
+# Win64 Debug
+int HomingSpaceLeaf(int p1, int p2, int p3, int p4) {
+mov         dword ptr [p3],r9d # even begin leaf function, params are saved
+mov         dword ptr [p2],r8d
+mov         dword ptr [p1],edx
+mov         dword ptr [rsp+8],ecx
+push        rdi
+
+# Win64 Release
+	return p1 + p2 + p3 + p4;
+lea         eax,[rcx+rdx] # params not saved (neither has stack frame)
+add         eax,r8d
+add         eax,r9d
+}
+*/
+int HomingSpaceLeaf(int p1, int p2, int p3, int p4) {
+	return p1 + p2 + p3 + p4;
+}
+
+
+/*
+"The register based parameter homing space exists only for non-leaf 
+functions." - x64 Deep Dive
+
+# Win64 Debug
+int HomingSpaceNonLeaf(int p1, int p2, int p3, int p4) {
+mov         dword ptr [rsp+20h],r9d # homing space saving params
+mov         dword ptr [rsp+18h],r8d
+mov         dword ptr [rsp+10h],edx
+mov         dword ptr [rsp+8],ecx
+push        rdi
+sub         rsp,20h
+
+# Win64 Release
+int TestHomingSpaceNonLeaf() {
+sub         rsp,28h
+	int ret = HomingSpaceNonLeaf(1, 2, 3, 4);
+mov         edx,2 # even begin non-leaf function, params are not saved
+lea         r9d,[rdx+2]
+lea         r8d,[rdx+1]
+lea         ecx,[rdx-1]
+call        HomingSpaceNonLeaf
+*/
+int HomingSpaceNonLeaf(int p1, int p2, int p3, int p4) {
+	return HomingSpaceLeaf(p1, p2, p3, p4);
+}
+
+
+int TestHomingSpaceNonLeaf() {
+    int ret = HomingSpaceNonLeaf(1, 2, 3, 4);
+	return ret == 10 ? 1 : 0;
+}
+
+
+/*
+# Win64 Debug
+			p5 = i + j + (i % 2 ? p1 : p2) + (j % 2 ? p3 : p4);
+mov         eax,dword ptr [rsp+0Ch]
+cdq
+and         eax,1
+xor         eax,edx
+sub         eax,edx
+test        eax,eax
+je          ChildSPF3+0BBh
+mov         rax,qword ptr [p1]
+mov         eax,dword ptr [rax]
+mov         dword ptr [rsp+14h],eax # reference child-sp
+jmp         ChildSPF3+0C6h
+mov         rax,qword ptr [p2]
+mov         eax,dword ptr [rax]
+mov         dword ptr [rsp+14h],eax # reference child-sp
+mov         eax,dword ptr [rsp+10h] # reference child-sp
+cdq
+and         eax,1
+xor         eax,edx
+sub         eax,edx
+test        eax,eax
+je          ChildSPF3+0E3h
+mov         rax,qword ptr [p3]
+mov         eax,dword ptr [rax]
+mov         dword ptr [rsp+18h],eax # reference child-sp
+jmp         ChildSPF3+0EEh
+mov         rax,qword ptr [p4]
+mov         eax,dword ptr [rax]
+mov         dword ptr [rsp+18h],eax # reference child-sp
+mov         eax,dword ptr [rsp+10h] # reference child-sp
+mov         ecx,dword ptr [rsp+0Ch] # reference child-sp
+add         ecx,eax
+mov         eax,ecx
+add         eax,dword ptr [rsp+14h] # reference child-sp
+add         eax,dword ptr [rsp+18h] # reference child-sp
+mov         rcx,qword ptr [p5]
+mov         dword ptr [rcx],eax
+*/
+int ChildSPF3(int& p1, int& p2, int& p3, int& p4, int& p5, int& p6, int& p7, int& p8) {
+	int ret = 0;
+	int lv1 = p1 + p2 + p3 + p4;
+	int lv2 = p5 + p6 + p7 + p8;
+
+	for (int i = 0; i < 50; ++i) {
+		for (int j = 0; j < 60; ++j) {
+			p5 = i + j + (i % 2 ? p1 : p2) + (j % 2 ? p3 : p4);
+			p6 = i + j + (i % 2 ? p5 : p6) + (j % 2 ? p7 : p8);
+			ret += lv1 + lv2 + p5 + p6;
+		}
+	}
+
+	return ret;
+}
+
+
+int ChildSPF2(int& p1, int& p2, int& p3, int& p4, int& p5, int& p6, int& p7, int& p8) {
+	int ret = 0;
+
+	for (int i = 0; i < 30; ++i) {
+		for (int j = 0; j < 40; ++j) {
+			p7 = i + j + (i % 2 ? p1 : p2) + (j % 2 ? p3 : p4);
+			p8 = i + j + (i % 2 ? p5 : p6) + (j % 2 ? p7 : p8);
+		}
+	}
+
+	int lv1 = ChildSPF3(p1, p2, p3, p4, p5, p6, p7, p8);
+	int lv2 = ChildSPF3(p8, p7, p6, p5, p4, p3, p2, p1);
+    ret += lv1 + lv2 + p1 + p2 + p7 + p8;
+
+
+	return ret;
+}
+
+
+int ChildSPF1(int& p1, int& p2, int& p3, int& p4, int& p5, int& p6, int& p7, int& p8) {
+	int ret = 0;
+
+	for (int i = 0; i < 10; ++i) {
+		for (int j = 0; j < 20; ++j) {
+			p7 = i + j + (i % 2 ? p1 : p2) + (j % 2 ? p3 : p4);
+			p8 = i + j + (i % 2 ? p5 : p6) + (j % 2 ? p7 : p8);
+		}
+	}
+
+	int lv1 = ChildSPF3(p1, p2, p3, p4, p5, p6, p7, p8);
+	int lv2 = ChildSPF3(p8, p7, p6, p5, p4, p3, p2, p1);
+    ret += lv1 + lv2 + p1 + p2 + p7 + p8;
+
+
+	return ret;
+}
+
+
+/*
+"The value of the Child-SP register displayed by the debugger's "k" command
+represents the address at which the stack pointer (RSP) points to, as the point
+where the function displayed in that frame, has finished executing its prolog.
+The next item that would be pushed on the stack would be the return address of
+the function as it invokes its callees. Since X64 functions do not modify the
+value of RSP after the function prolog, any stack accesses performed by the rest
+of the function are done relative to this position of the stack pointer. This
+includes access to stack based parameters and local variables." - x64 Deep Dive
+
+*/
+int TestChildSP() {
+	int p1 = 1, p2 = 2, p3 = 3, p4 = 4, p5 = 5, p6 = 6, p7 = 7, p8 = 8;
+	int ret = ChildSPF1(p1, p2, p3, p4, p5, p6, p7, p8)
+		+ ChildSPF2(p1, p2, p3, p4, p5, p6, p7, p8)
+		+ ChildSPF3(p1, p2, p3, p4, p5, p6, p7, p8);
+	return ret == 158942311 ? 1 : 0;
+}
+
+
 int main()
 {
 	int ret = 0;
@@ -378,6 +551,8 @@ int main()
 	ret += TestFramePointerOmission();
 	ret += TestRSPIsTheSame();
 	ret += TestHomingSpace();
+	ret += TestHomingSpaceNonLeaf();
+	ret += TestChildSP();
 	return ret;
 }
 
